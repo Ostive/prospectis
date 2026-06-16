@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prospectis – Prospection cartographique</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root{
+    --navy:#1c2b3f;
+    --navy-2:#27405c;
+    --bg:#f1f4f7;
+    --surface:#ffffff;
+    --border:#dfe5ec;
+    --text:#1c2b3f;
+    --muted:#728094;
+    --accent:#1f7a68;
+    --accent-dark:#185f51;
+    --accent-light:#e4f2ef;
+    --radius:8px;
+    --shadow:0 6px 20px rgba(28,43,63,.10);
+
+    --c-prospecter-dot:#9aa3ad; --c-prospecter-bg:#eef0f2; --c-prospecter-fg:#5b6675;
+    --c-contactee-dot:#f6a623;  --c-contactee-bg:#fef3e2;  --c-contactee-fg:#a35b07;
+    --c-interessee-dot:#2fae60; --c-interessee-bg:#e6f6ec; --c-interessee-fg:#15803d;
+    --c-noninteressee-dot:#e5544c; --c-noninteressee-bg:#fdecec; --c-noninteressee-fg:#b91c1c;
+    --c-relancer-dot:#3b82d6;   --c-relancer-bg:#e8f1fb;   --c-relancer-fg:#1d4ed8;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--text); background:var(--bg); font-size:14px; line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  .hidden{display:none !important;}
+  button{font:inherit; cursor:pointer;}
+  input, select, textarea{font:inherit; color:inherit;}
+  a{color:var(--accent);}
+
+  /* ---------- Boutons / champs communs ---------- */
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    border:1px solid var(--border); background:var(--surface); color:var(--text);
+    border-radius:var(--radius); padding:8px 14px; font-size:13px; font-weight:600;
+    transition:background .15s, border-color .15s;
+  }
+  .btn:hover{background:#f6f8fa;}
+  .btn-primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-block{width:100%;}
+  .btn-sm{padding:5px 10px; font-size:12px;}
+  .icon-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:var(--radius); border:1px solid transparent;
+    background:transparent; color:inherit;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.08);}
+  .field{display:flex; flex-direction:column; gap:5px; margin-bottom:14px;}
+  .field label{font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted);}
+  .field input, .field select, .field textarea{
+    border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px;
+    background:var(--surface); font-size:13px; width:100%;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus, button:focus-visible, input:focus-visible{
+    outline:2px solid var(--accent); outline-offset:1px;
+  }
+  .row-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  /* ---------- Badges de statut ---------- */
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; padding:3px 10px;
+    border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap;
+  }
+  .badge .dot{width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0;}
+  .status-a_prospecter{background:var(--c-prospecter-bg); color:var(--c-prospecter-fg);}
+  .status-a_prospecter .dot{background:var(--c-prospecter-dot);}
+  .status-contactee{background:var(--c-contactee-bg); color:var(--c-contactee-fg);}
+  .status-contactee .dot{background:var(--c-contactee-dot);}
+  .status-interessee{background:var(--c-interessee-bg); color:var(--c-interessee-fg);}
+  .status-interessee .dot{background:var(--c-interessee-dot);}
+  .status-non_interessee{background:var(--c-noninteressee-bg); color:var(--c-noninteressee-fg);}
+  .status-non_interessee .dot{background:var(--c-noninteressee-dot);}
+  .status-a_relancer{background:var(--c-relancer-bg); color:var(--c-relancer-fg);}
+  .status-a_relancer .dot{background:var(--c-relancer-dot);}
+
+  /* =====================================================
+     LOGIN
+  ===================================================== */
+  #login-screen{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 60%, #336b59 100%);
+    padding:20px;
+  }
+  .login-card{
+    background:var(--surface); border-radius:14px; padding:36px 32px; width:100%; max-width:380px;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+  .login-brand .pin{color:var(--accent); width:30px; height:30px; flex-shrink:0;}
+  .login-brand h1{font-size:22px; font-weight:800; letter-spacing:-.01em;}
+  .login-card p.tagline{color:var(--muted); font-size:13px; margin-bottom:24px;}
+  .login-note{
+    margin-top:14px; font-size:12px; color:var(--muted); background:var(--accent-light);
+    border-radius:var(--radius); padding:10px 12px; line-height:1.5;
+  }
+
+  /* =====================================================
+     APP SHELL
+  ===================================================== */
+  #app{display:flex; flex-direction:column; height:100vh;}
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    flex-shrink:0; display:flex; align-items:center; gap:14px;
+    background:var(--navy); color:#fff; padding:0 18px; height:60px;
+  }
+  .brand{display:flex; align-items:center; gap:8px; flex-shrink:0;}
+  .brand .pin{width:24px; height:24px; color:var(--accent);}
+  .brand span{font-weight:800; font-size:16px; letter-spacing:-.01em;}
+  .brand .sub{display:none;}
+
+  .searchbar{
+    flex:1; max-width:520px; display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.14);
+    border-radius:999px; padding:0 14px; height:38px;
+  }
+  .searchbar:focus-within{background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.3);}
+  .searchbar svg{width:16px; height:16px; color:rgba(255,255,255,.7); flex-shrink:0;}
+  .searchbar input{
+    background:transparent; border:none; color:#fff; width:100%; font-size:13px; outline:none;
+  }
+  .searchbar input::placeholder{color:rgba(255,255,255,.55);}
+
+  .topbar-spacer{flex:1;}
+  .userbox{display:flex; align-items:center; gap:10px; flex-shrink:0;}
+  .userbox .who{text-align:right; line-height:1.25;}
+  .userbox .who .name{font-size:13px; font-weight:700;}
+  .userbox .who .role{font-size:11px; color:rgba(255,255,255,.6);}
+  .topbar .icon-btn svg{width:18px; height:18px;}
+  .filters-toggle{display:none;}
+
+  /* ---------- Stats bar ---------- */
+  .stats{
+    flex-shrink:0; display:flex; gap:10px; padding:12px 18px; background:var(--surface);
+    border-bottom:1px solid var(--border); overflow-x:auto;
+  }
+  .stat{
+    flex:1; min-width:128px; border:1px solid var(--border); border-radius:var(--radius);
+    padding:8px 12px; display:flex; flex-direction:column; gap:2px; border-left:4px solid var(--accent);
+  }
+  .stat .stat-value{font-size:19px; font-weight:800;}
+  .stat .stat-label{font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px;}
+  .stat .stat-label .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  .stat.st-a_prospecter{border-left-color:var(--c-prospecter-dot);}
+  .stat.st-contactee{border-left-color:var(--c-contactee-dot);}
+  .stat.st-interessee{border-left-color:var(--c-interessee-dot);}
+  .stat.st-non_interessee{border-left-color:var(--c-noninteressee-dot);}
+  .stat.st-a_relancer{border-left-color:var(--c-relancer-dot);}
+
+  /* ---------- Layout ---------- */
+  .layout{flex:1; display:flex; min-height:0; position:relative;}
+
+  /* ---------- Sidebar filtres ---------- */
+  .sidebar{
+    width:268px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--border);
+    overflow-y:auto; padding:16px;
+  }
+  .filter-group{margin-bottom:18px;}
+  .filter-group h3{
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border);
+  }
+  .checkbox-row{
+    display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; cursor:pointer;
+  }
+  .checkbox-row .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .checkbox-row input{width:15px; height:15px;}
+  .sidebar-foot{padding-top:8px;}
+  .backdrop{display:none; position:fixed; inset:0; background:rgba(15,23,32,.45); z-index:150;}
+
+  /* ---------- Content ---------- */
+  .content{flex:1; display:flex; flex-direction:column; min-width:0; position:relative;}
+  .view-bar{
+    flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:10px 18px; border-bottom:1px solid var(--border); background:var(--surface); flex-wrap:wrap;
+  }
+  .view-tabs{display:flex; gap:6px; background:var(--bg); border-radius:999px; padding:3px;}
+  .view-tab{
+    border:none; background:transparent; padding:6px 16px; border-radius:999px;
+    font-size:13px; font-weight:700; color:var(--muted);
+  }
+  .view-tab.active{background:var(--surface); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  .results-count{font-size:12px; color:var(--muted);}
+
+  /* ---------- Carte ---------- */
+  .map-wrap{flex:1; position:relative; min-height:0;}
+  #map{position:absolute; inset:0; background:#e9eef2;}
+  .legend{
+    position:absolute; bottom:14px; left:14px; z-index:10;
+    background:rgba(255,255,255,.95); border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px 12px; box-shadow:var(--shadow); font-size:12px;
+  }
+  .legend h4{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px;}
+  .legend-item{display:flex; align-items:center; gap:8px; padding:2px 0;}
+  .legend-item .dot{width:10px; height:10px; border-radius:50%; flex-shrink:0; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.1);}
+
+  /* ---------- Liste ---------- */
+  .table-wrap{flex:1; overflow:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{
+    text-align:left; padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--border);
+    font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); white-space:nowrap;
+    position:sticky; top:0; cursor:pointer; user-select:none;
+  }
+  thead th:hover{color:var(--text);}
+  thead th .arrow{margin-left:4px; opacity:.6;}
+  tbody td{padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:middle; white-space:nowrap;}
+  tbody tr{background:var(--surface); cursor:pointer;}
+  tbody tr:hover{background:var(--accent-light);}
+  tbody tr.selected{background:#dcefe9;}
+  .cell-main{font-weight:700;}
+  .cell-sub{color:var(--muted); font-size:12px;}
+  .status-select{
+    border:1px solid var(--border); border-radius:999px; padding:3px 8px; font-size:12px; font-weight:700;
+    background:var(--surface);
+  }
+  .empty-row td{text-align:center; color:var(--muted); padding:40px 14px;}
+
+  /* ---------- Panneau fiche entreprise ---------- */
+  .detail-panel{
+    position:absolute; top:0; right:0; bottom:0; width:400px; background:var(--surface);
+    border-left:1px solid var(--border); box-shadow:-6px 0 24px rgba(28,43,63,.10);
+    transform:translateX(100%); transition:transform .25s ease; z-index:40;
+    display:flex; flex-direction:column;
+  }
+  .detail-panel.open{transform:translateX(0);}
+  .detail-header{
+    flex-shrink:0; padding:16px 18px; border-bottom:1px solid var(--border);
+    display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+  }
+  .detail-header h2{font-size:17px; font-weight:800; margin-bottom:4px;}
+  .detail-header .meta{font-size:12px; color:var(--muted);}
+  .detail-body{flex:1; overflow-y:auto; padding:16px 18px;}
+  .section{margin-bottom:20px;}
+  .section h3{
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border);
+  }
+  .info-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; font-size:13px;}
+  .info-grid .lbl{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em;}
+  .info-grid .val{font-weight:600; margin-top:1px;}
+  .urgency{font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:6px;}
+  .urgency.late{background:var(--c-noninteressee-bg); color:var(--c-noninteressee-fg);}
+  .urgency.soon{background:var(--c-relancer-bg); color:var(--c-relancer-fg);}
+  .comment{background:var(--bg); border-radius:var(--radius); padding:10px 12px; margin-bottom:8px;}
+  .comment .comment-meta{font-size:11px; color:var(--muted); margin-bottom:4px; font-weight:700;}
+  .comment .comment-text{font-size:13px;}
+  .no-comments{font-size:13px; color:var(--muted); font-style:italic; margin-bottom:10px;}
+  .detail-footer{flex-shrink:0; padding:14px 18px; border-top:1px solid var(--border);}
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--navy); color:#fff; padding:10px 18px; border-radius:999px; font-size:13px;
+    font-weight:600; opacity:0; transition:opacity .2s, transform .2s; z-index:300; pointer-events:none;
+    box-shadow:var(--shadow);
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  /* =====================================================
+     RESPONSIVE
+  ===================================================== */
+  @media (min-width:720px){
+    .brand .sub{display:block; font-size:11px; color:rgba(255,255,255,.55); margin-top:-2px;}
+  }
+  @media (max-width:1024px){
+    .filters-toggle{display:inline-flex;}
+    .sidebar{
+      position:fixed; top:0; left:0; bottom:0; z-index:200; width:280px;
+      transform:translateX(-100%); transition:transform .2s ease; box-shadow:8px 0 24px rgba(0,0,0,.15);
+    }
+    .sidebar.open{transform:translateX(0);}
+    .sidebar.open ~ .backdrop, .backdrop.show{display:block;}
+  }
+  @media (max-width:640px){
+    .userbox .who{display:none;}
+    .searchbar{max-width:none;}
+    .detail-panel{width:100%;}
+    .stats{padding:10px 12px;}
+    .stat{min-width:118px;}
+    .view-bar{padding:10px 12px;}
+    .legend{left:8px; bottom:8px; padding:8px 10px;}
+  }
+</style>
+</head>
+<body>
+
+  <!-- =====================================================
+       ECRAN DE CONNEXION
+  ===================================================== -->
+  <div id="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <svg class="pin" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg>
+        <h1>Prospectis</h1>
+      </div>
+      <p class="tagline">Outil de prospection cartographique — réseau Slash Intérim</p>
+      <form id="login-form">
+        <div class="field">
+          <label for="login-email">Adresse e-mail</label>
+          <input type="email" id="login-email" placeholder="robin.hantzer@slash-interim.fr" required>
+        </div>
+        <div class="field">
+          <label for="login-password">Mot de passe</label>
+          <input type="password" id="login-password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Se connecter</button>
+      </form>
+      <p class="login-note">Démo — saisissez n'importe quelles valeurs pour accéder au tableau de bord. L'authentification réelle sera branchée sur le système d'accès défini par Slash Intérim.</p>
+    </div>
+  </div>
+
+  <!-- =====================================================
+       APPLICATION
+  ===================================================== -->
+  <div id="app" class="hidden">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="icon-btn filters-toggle" id="btn-open-filters" aria-label="Ouvrir les filtres">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor" stroke="none"/></svg>
+      </button>
+
+      <div class="brand">
+        <svg class="pin" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="#1c2b3f"/></svg>
+        <div>
+          <span>Prospectis</span>
+          <div class="sub">Slash Intérim — Prospection</div>
+        </div>
+      </div>
+
+      <div class="searchbar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input type="text" id="search-input" placeholder="Entreprise, SIREN, SIRET, ville, code NAF…">
+      </div>
+
+      <div class="topbar-spacer"></div>
+
+      <div class="userbox">
+        <div class="who">
+          <div class="name">Robin Hantzer</div>
+          <div class="role">Recruteur indépendant</div>
+        </div>
+        <button class="icon-btn" id="btn-logout" aria-label="Se déconnecter" title="Se déconnecter">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Statistiques globales -->
+    <section class="stats" id="stats-bar"></section>
+
+    <div class="layout">
+
+      <!-- Sidebar : filtres -->
+      <aside class="sidebar" id="sidebar">
+        <div class="filter-group">
+          <h3>Localisation</h3>
+          <div class="field">
+            <label for="filter-region">Région</label>
+            <select id="filter-region"><option value="">Toutes les régions</option></select>
+          </div>
+          <div class="field">
+            <label for="filter-departement">Département</label>
+            <select id="filter-departement"><option value="">Tous les départements</option></select>
+          </div>
+          <div class="field">
+            <label for="filter-ville">Ville</label>
+            <select id="filter-ville"><option value="">Toutes les villes</option></select>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <h3>Activité</h3>
+          <div class="field">
+            <label for="filter-secteur">Secteur d'activité</label>
+            <select id="filter-secteur"><option value="">Tous les secteurs</option></select>
+          </div>
+          <div class="field">
+            <label for="filter-naf">Code NAF</label>
+            <input type="text" id="filter-naf" placeholder="ex. 4120A">
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <h3>Prospection</h3>
+          <div class="field" style="margin-bottom:8px;">
+            <label>Statut</label>
+          </div>
+          <div id="filter-statuts"></div>
+          <div class="field" style="margin-top:12px;">
+            <label for="filter-contact-depuis">Dernier contact depuis le</label>
+            <input type="date" id="filter-contact-depuis">
+          </div>
+          <div class="field">
+            <label for="filter-relance-avant">Relance prévue avant le</label>
+            <input type="date" id="filter-relance-avant">
+          </div>
+        </div>
+
+        <div class="sidebar-foot">
+          <button class="btn btn-block" id="btn-reset-filters">Réinitialiser les filtres</button>
+        </div>
+      </aside>
+
+      <div class="backdrop" id="backdrop"></div>
+
+      <!-- Contenu principal -->
+      <main class="content">
+        <div class="view-bar">
+          <div class="view-tabs">
+            <button class="view-tab active" data-view="map">Carte</button>
+            <button class="view-tab" data-view="list">Liste</button>
+          </div>
+          <div class="results-count" id="results-count"></div>
+        </div>
+
+        <!-- Vue carte -->
+        <div class="map-wrap" id="map-view">
+          <div id="map"></div>
+          <div class="legend">
+            <h4>Statut de prospection</h4>
+            <div id="legend-items"></div>
+          </div>
+        </div>
+
+        <!-- Vue liste -->
+        <div class="table-wrap hidden" id="list-view">
+          <table>
+            <thead>
+              <tr>
+                <th data-sort="nom">Entreprise</th>
+                <th data-sort="ville">Ville</th>
+                <th data-sort="secteur">Secteur d'activité</th>
+                <th data-sort="statut">Statut</th>
+                <th data-sort="dernierContact">Dernier contact</th>
+                <th data-sort="prochaineRelance">Prochaine relance</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Fiche entreprise -->
+        <aside class="detail-panel" id="detail-panel">
+          <div class="detail-header">
+            <div>
+              <h2 id="detail-nom">—</h2>
+              <div class="meta" id="detail-meta">—</div>
+            </div>
+            <button class="icon-btn" id="btn-close-detail" aria-label="Fermer la fiche">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+            </button>
+          </div>
+          <div class="detail-body">
+
+            <div class="section">
+              <h3>Identification</h3>
+              <div class="info-grid">
+                <div><div class="lbl">SIREN</div><div class="val" id="detail-siren">—</div></div>
+                <div><div class="lbl">SIRET</div><div class="val" id="detail-siret">—</div></div>
+                <div style="grid-column:1 / -1;"><div class="lbl">Adresse</div><div class="val" id="detail-adresse">—</div></div>
+                <div><div class="lbl">Département</div><div class="val" id="detail-departement">—</div></div>
+                <div><div class="lbl">Région</div><div class="val" id="detail-region">—</div></div>
+                <div><div class="lbl">Secteur</div><div class="val" id="detail-secteur">—</div></div>
+                <div><div class="lbl">Code NAF</div><div class="val" id="detail-naf">—</div></div>
+              </div>
+            </div>
+
+            <div class="section">
+              <h3>Contact</h3>
+              <div class="field">
+                <label for="detail-contact">Contact principal</label>
+                <input type="text" id="detail-contact">
+              </div>
+              <div class="row-2">
+                <div class="field">
+                  <label for="detail-telephone">Téléphone</label>
+                  <input type="tel" id="detail-telephone">
+                </div>
+                <div class="field">
+                  <label for="detail-email">E-mail</label>
+                  <input type="email" id="detail-email">
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <h3>Suivi de prospection</h3>
+              <div class="field">
+                <label for="detail-statut">Statut</label>
+                <select id="detail-statut"></select>
+              </div>
+              <div class="row-2">
+                <div class="field">
+                  <label for="detail-dernier-contact">Dernier contact</label>
+                  <input type="date" id="detail-dernier-contact">
+                </div>
+                <div class="field">
+                  <label for="detail-prochaine-relance">Prochaine relance</label>
+                  <input type="date" id="detail-prochaine-relance">
+                </div>
+              </div>
+              <div id="detail-urgency"></div>
+            </div>
+
+            <div class="section">
+              <h3>Commentaires internes</h3>
+              <div id="detail-comments"></div>
+              <div class="field">
+                <label for="detail-new-comment">Ajouter un commentaire</label>
+                <textarea id="detail-new-comment" rows="3" placeholder="Confidentiel — visible uniquement par l'équipe de prospection"></textarea>
+              </div>
+              <button class="btn btn-sm" id="btn-add-comment">Ajouter le commentaire</button>
+            </div>
+
+          </div>
+          <div class="detail-footer">
+            <button class="btn btn-primary btn-block" id="btn-save-detail">Enregistrer les modifications</button>
+          </div>
+        </aside>
+
+      </main>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+  /* =====================================================
+     CONFIGURATION DES STATUTS
+     (couleurs imposées par le cahier des charges §6.3)
+  ===================================================== */
+  const STATUTS = {
+    a_prospecter:    { label: "À prospecter",    dot: "#9aa3ad" },
+    contactee:       { label: "Contactée",       dot: "#f6a623" },
+    interessee:      { label: "Intéressée",      dot: "#2fae60" },
+    non_interessee:  { label: "Non intéressée",  dot: "#e5544c" },
+    a_relancer:      { label: "À relancer",      dot: "#3b82d6" },
+  };
+
+  /* =====================================================
+     DONNEES DE DEMONSTRATION
+     (à remplacer par les appels N8N / Google Sheets)
+  ===================================================== */
+  const companies = [
+    { id:1, nom:"Atelier Métallurgie du Nord", siren:"812345678", siret:"81234567800019",
+      adresse:"12 Rue de l'Industrie", ville:"Lille", departement:"59 - Nord", region:"Hauts-de-France",
+      secteur:"Métallurgie", naf:"2511Z", lat:50.6292, lng:3.0573,
+      contact:"Sophie Lambert", telephone:"03 20 12 34 56", email:"contact@atelier-metallurgie-nord.fr",
+      statut:"a_prospecter", dernierContact:null, prochaineRelance:null, commentaires:[] },
+
+    { id:2, nom:"Logistique Express Atlantique", siren:"723456789", siret:"72345678900027",
+      adresse:"5 Avenue du Port", ville:"Nantes", departement:"44 - Loire-Atlantique", region:"Pays de la Loire",
+      secteur:"Transport & Logistique", naf:"5210B", lat:47.2184, lng:-1.5536,
+      contact:"Karim Belaïd", telephone:"02 40 23 45 67", email:"k.belaid@lea-logistique.fr",
+      statut:"contactee", dernierContact:"2026-05-28", prochaineRelance:"2026-06-25",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-05-28", texte:"Premier échange téléphonique. RH disponible mi-juin pour un point sur les besoins en intérim."} ] },
+
+    { id:3, nom:"BTP Constructions Réunies", siren:"445566778", siret:"44556677800031",
+      adresse:"27 Chemin des Carrières", ville:"Toulouse", departement:"31 - Haute-Garonne", region:"Occitanie",
+      secteur:"Bâtiment & Travaux Publics", naf:"4120A", lat:43.6047, lng:1.4442,
+      contact:"Nadia Ferrand", telephone:"05 61 34 56 78", email:"n.ferrand@btp-reunies.fr",
+      statut:"interessee", dernierContact:"2026-06-02", prochaineRelance:"2026-06-18",
+      commentaires:[
+        {auteur:"Robin Hantzer", date:"2026-06-02", texte:"Besoin urgent de 4 maçons et 2 chefs d'équipe pour le chantier Toulouse-Sud."},
+        {auteur:"Robin Hantzer", date:"2026-06-09", texte:"Envoi de 3 profils, retour attendu sous 8 jours."}
+      ] },
+
+    { id:4, nom:"Hôtel-Restaurant Le Mistral", siren:"390123456", siret:"39012345600014",
+      adresse:"12 Quai du Port", ville:"Marseille", departement:"13 - Bouches-du-Rhône", region:"Provence-Alpes-Côte d'Azur",
+      secteur:"Hôtellerie & Restauration", naf:"5610A", lat:43.2965, lng:5.3698,
+      contact:"Julien Pradier", telephone:"04 91 22 33 44", email:"direction@lemistral-marseille.fr",
+      statut:"a_relancer", dernierContact:"2026-04-30", prochaineRelance:"2026-06-16",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-04-30", texte:"Pic d'activité estival prévu : besoin de personnel de salle et de cuisine en juillet."} ] },
+
+    { id:5, nom:"Clinique Saint-Roch", siren:"330987654", siret:"33098765400022",
+      adresse:"8 Rue des Étuves", ville:"Montpellier", departement:"34 - Hérault", region:"Occitanie",
+      secteur:"Santé & Médico-social", naf:"8610Z", lat:43.6108, lng:3.8767,
+      contact:"Dr Anne Vasseur", telephone:"04 67 45 67 89", email:"rh@clinique-saintroch.fr",
+      statut:"non_interessee", dernierContact:"2026-03-12", prochaineRelance:null,
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-03-12", texte:"Travaillent déjà avec une agence partenaire, pas de besoin actuellement."} ] },
+
+    { id:6, nom:"Transports Dubois & Fils", siren:"654321098", siret:"65432109800045",
+      adresse:"45 Route de Genève", ville:"Lyon", departement:"69 - Rhône", region:"Auvergne-Rhône-Alpes",
+      secteur:"Transport & Logistique", naf:"4941A", lat:45.7640, lng:4.8357,
+      contact:"Marc Dubois", telephone:"04 78 56 78 90", email:"m.dubois@transports-dubois.fr",
+      statut:"contactee", dernierContact:"2026-06-05", prochaineRelance:"2026-06-20", commentaires:[] },
+
+    { id:7, nom:"Pâtisserie Industrielle d'Alsace", siren:"501234567", siret:"50123456700018",
+      adresse:"16 Rue de la Meinau", ville:"Strasbourg", departement:"67 - Bas-Rhin", region:"Grand Est",
+      secteur:"Agroalimentaire", naf:"1071A", lat:48.5734, lng:7.7521,
+      contact:"Élodie Wagner", telephone:"03 88 12 34 56", email:"rh@patisserie-alsace.fr",
+      statut:"a_prospecter", dernierContact:null, prochaineRelance:null, commentaires:[] },
+
+    { id:8, nom:"Nettoyage Pro Services", siren:"489765432", siret:"48976543200026",
+      adresse:"9 Rue de Vaugirard", ville:"Paris", departement:"75 - Paris", region:"Île-de-France",
+      secteur:"Propreté & Services", naf:"8121Z", lat:48.8566, lng:2.3522,
+      contact:"Hakim Cherif", telephone:"01 45 67 89 01", email:"h.cherif@nettoyagepro.fr",
+      statut:"interessee", dernierContact:"2026-06-10", prochaineRelance:"2026-06-24",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-06-10", texte:"Très intéressés : recherchent 6 agents d'entretien sur Paris intra-muros dès juillet."} ] },
+
+    { id:9, nom:"MécaTech Industries", siren:"378901234", siret:"37890123400033",
+      adresse:"21 Zone Industrielle de Comboire", ville:"Grenoble", departement:"38 - Isère", region:"Auvergne-Rhône-Alpes",
+      secteur:"Industrie & Mécanique", naf:"2562B", lat:45.1885, lng:5.7245,
+      contact:"Patrick Mercier", telephone:"04 76 23 45 67", email:"p.mercier@mecatech-industries.fr",
+      statut:"a_relancer", dernierContact:"2026-05-15", prochaineRelance:"2026-06-17",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-05-15", texte:"À recontacter après leur période d'inventaire annuel."} ] },
+
+    { id:10, nom:"Surgelés du Littoral", siren:"412345098", siret:"41234509800012",
+      adresse:"2 Quai de la Marne", ville:"Le Havre", departement:"76 - Seine-Maritime", region:"Normandie",
+      secteur:"Agroalimentaire", naf:"4711D", lat:49.4944, lng:0.1079,
+      contact:"Sandra Lemoine", telephone:"02 35 67 89 01", email:"s.lemoine@surgeles-littoral.fr",
+      statut:"a_prospecter", dernierContact:null, prochaineRelance:null, commentaires:[] },
+
+    { id:11, nom:"Isolation & Travaux Rennes", siren:"523456712", siret:"52345671200015",
+      adresse:"14 Rue de la Visitation", ville:"Rennes", departement:"35 - Ille-et-Vilaine", region:"Bretagne",
+      secteur:"Bâtiment & Travaux Publics", naf:"4329A", lat:48.1173, lng:-1.6778,
+      contact:"Yann Le Goff", telephone:"02 99 34 56 78", email:"y.legoff@isolation-rennes.fr",
+      statut:"contactee", dernierContact:"2026-06-08", prochaineRelance:"2026-06-22", commentaires:[] },
+
+    { id:12, nom:"Plateforme Logistique Centre", siren:"601234589", siret:"60123458900028",
+      adresse:"8 Rue de l'Entrepôt", ville:"Tours", departement:"37 - Indre-et-Loire", region:"Centre-Val de Loire",
+      secteur:"Transport & Logistique", naf:"5210B", lat:47.3941, lng:0.6848,
+      contact:"Florence Petit", telephone:"02 47 45 67 89", email:"f.petit@plf-centre.fr",
+      statut:"a_prospecter", dernierContact:null, prochaineRelance:null, commentaires:[] },
+
+    { id:13, nom:"Bâtiment Rhône-Alpes", siren:"345098712", siret:"34509871200041",
+      adresse:"33 Boulevard des Brotteaux", ville:"Lyon", departement:"69 - Rhône", region:"Auvergne-Rhône-Alpes",
+      secteur:"Bâtiment & Travaux Publics", naf:"4120A", lat:45.7700, lng:4.8500,
+      contact:"Olivier Bernard", telephone:"04 72 34 56 78", email:"o.bernard@bra-construction.fr",
+      statut:"interessee", dernierContact:"2026-06-11", prochaineRelance:"2026-06-19",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-06-11", texte:"Souhaitent un cadre de coopération à l'année pour 3 chantiers en cours."} ] },
+
+    { id:14, nom:"Restauration Collective Reims", siren:"287654321", siret:"28765432100037",
+      adresse:"19 Rue Cérès", ville:"Reims", departement:"51 - Marne", region:"Grand Est",
+      secteur:"Hôtellerie & Restauration", naf:"5610A", lat:49.2583, lng:4.0317,
+      contact:"Camille Roy", telephone:"03 26 45 67 89", email:"c.roy@rc-reims.fr",
+      statut:"a_relancer", dernierContact:"2026-05-20", prochaineRelance:"2026-06-15",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-05-20", texte:"Relance prévue avant la rentrée scolaire pour renforcer les équipes cantines."} ] },
+
+    { id:15, nom:"Industries Métalliques Dijon", siren:"198765043", siret:"19876504300029",
+      adresse:"6 Avenue de Stalingrad", ville:"Dijon", departement:"21 - Côte-d'Or", region:"Bourgogne-Franche-Comté",
+      secteur:"Métallurgie", naf:"2511Z", lat:47.3220, lng:5.0415,
+      contact:"Bertrand Caron", telephone:"03 80 56 78 90", email:"b.caron@imd-dijon.fr",
+      statut:"non_interessee", dernierContact:"2026-02-18", prochaineRelance:null,
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-02-18", texte:"Effectifs gelés jusqu'à nouvel ordre. À recontacter en fin d'année."} ] },
+
+    { id:16, nom:"Transport Frigorifique Sud", siren:"276543098", siret:"27654309800024",
+      adresse:"21 Boulevard Riquier", ville:"Nice", departement:"06 - Alpes-Maritimes", region:"Provence-Alpes-Côte d'Azur",
+      secteur:"Transport & Logistique", naf:"4941A", lat:43.7102, lng:7.2620,
+      contact:"Mathieu Aubert", telephone:"04 93 67 89 01", email:"m.aubert@tfs-nice.fr",
+      statut:"a_prospecter", dernierContact:null, prochaineRelance:null, commentaires:[] },
+
+    { id:17, nom:"Clinique du Parc Angers", siren:"365478921", siret:"36547892100016",
+      adresse:"10 Rue du Maine", ville:"Angers", departement:"49 - Maine-et-Loire", region:"Pays de la Loire",
+      secteur:"Santé & Médico-social", naf:"8610Z", lat:47.4784, lng:-0.5632,
+      contact:"Dr Isabelle Moreau", telephone:"02 41 78 90 12", email:"i.moreau@clinique-duparc.fr",
+      statut:"contactee", dernierContact:"2026-06-01", prochaineRelance:"2026-06-29", commentaires:[] },
+
+    { id:18, nom:"Auvergne Mécanique Précision", siren:"154329876", siret:"15432987600013",
+      adresse:"4 Rue de la Pardieu", ville:"Clermont-Ferrand", departement:"63 - Puy-de-Dôme", region:"Auvergne-Rhône-Alpes",
+      secteur:"Industrie & Mécanique", naf:"2562B", lat:45.7772, lng:3.0870,
+      contact:"Fabienne Roussel", telephone:"04 73 89 01 23", email:"f.roussel@amp-precision.fr",
+      statut:"interessee", dernierContact:"2026-06-12", prochaineRelance:"2026-06-26",
+      commentaires:[ {auteur:"Robin Hantzer", date:"2026-06-12", texte:"Validation du budget interne en cours, réponse attendue avant fin juin."} ] },
+  ];
+
+  /* =====================================================
+     ETAT GLOBAL
+  ===================================================== */
+  const state = {
+    search: "",
+    filters: {
+      region: "", departement: "", ville: "", secteur: "", naf: "",
+      statuts: new Set(Object.keys(STATUTS)),
+      contactDepuis: "", relanceAvant: "",
+    },
+    view: "map",
+    selectedId: null,
+    sort: { field: "nom", dir: "asc" },
+  };
+
+  const markersById = {};
+  let map;
+
+  /* =====================================================
+     UTILITAIRES
+  ===================================================== */
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  }
+  function formatDate(iso){
+    if(!iso) return "—";
+    const [y,m,d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  function daysFromToday(iso){
+    if(!iso) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const target = new Date(iso + "T00:00:00");
+    return Math.round((target - today) / 86400000);
+  }
+  function showToast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  /* =====================================================
+     INITIALISATION DES FILTRES (à partir des données)
+  ===================================================== */
+  function populateSelect(id, values, allLabel){
+    const select = document.getElementById(id);
+    select.innerHTML = `<option value="">${allLabel}</option>`;
+    values.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v; opt.textContent = v;
+      select.appendChild(opt);
+    });
+  }
+
+  function initFilterOptions(){
+    const unique = key => [...new Set(companies.map(c => c[key]))].sort((a,b)=>a.localeCompare(b,"fr"));
+    populateSelect("filter-region", unique("region"), "Toutes les régions");
+    populateSelect("filter-departement", unique("departement"), "Tous les départements");
+    populateSelect("filter-ville", unique("ville"), "Toutes les villes");
+    populateSelect("filter-secteur", unique("secteur"), "Tous les secteurs");
+
+    const wrap = document.getElementById("filter-statuts");
+    wrap.innerHTML = "";
+    Object.entries(STATUTS).forEach(([key, conf]) => {
+      const label = document.createElement("label");
+      label.className = "checkbox-row";
+      label.innerHTML = `<input type="checkbox" data-statut="${key}" checked>
+        <span class="dot" style="background:${conf.dot}"></span> ${conf.label}`;
+      wrap.appendChild(label);
+    });
+  }
+
+  /* =====================================================
+     FILTRAGE / TRI
+  ===================================================== */
+  function getFilteredCompanies(){
+    const f = state.filters;
+    const q = state.search.trim().toLowerCase();
+
+    let result = companies.filter(c => {
+      if(q){
+        const haystack = `${c.nom} ${c.siren} ${c.siret} ${c.ville} ${c.naf}`.toLowerCase();
+        if(!haystack.includes(q)) return false;
+      }
+      if(f.region && c.region !== f.region) return false;
+      if(f.departement && c.departement !== f.departement) return false;
+      if(f.ville && c.ville !== f.ville) return false;
+      if(f.secteur && c.secteur !== f.secteur) return false;
+      if(f.naf && !c.naf.toLowerCase().includes(f.naf.toLowerCase())) return false;
+      if(!f.statuts.has(c.statut)) return false;
+      if(f.contactDepuis){
+        if(!c.dernierContact || c.dernierContact < f.contactDepuis) return false;
+      }
+      if(f.relanceAvant){
+        if(!c.prochaineRelance || c.prochaineRelance > f.relanceAvant) return false;
+      }
+      return true;
+    });
+
+    const { field, dir } = state.sort;
+    result.sort((a,b) => {
+      let av = a[field], bv = b[field];
+      if(field === "statut"){ av = STATUTS[av].label; bv = STATUTS[bv].label; }
+      if(av === null) av = "";
+      if(bv === null) bv = "";
+      const cmp = String(av).localeCompare(String(bv), "fr");
+      return dir === "asc" ? cmp : -cmp;
+    });
+
+    return result;
+  }
+
+  /* =====================================================
+     RENDU : STATISTIQUES GLOBALES
+  ===================================================== */
+  function renderStats(){
+    const bar = document.getElementById("stats-bar");
+    const total = companies.length;
+    let html = `
+      <div class="stat">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">Entreprises au total</div>
+      </div>`;
+    Object.entries(STATUTS).forEach(([key, conf]) => {
+      const count = companies.filter(c => c.statut === key).length;
+      html += `
+        <div class="stat st-${key}">
+          <div class="stat-value">${count}</div>
+          <div class="stat-label"><span class="dot" style="background:${conf.dot}"></span>${conf.label}</div>
+        </div>`;
+    });
+    bar.innerHTML = html;
+  }
+
+  /* =====================================================
+     RENDU : LEGENDE CARTE
+  ===================================================== */
+  function renderLegend(){
+    const el = document.getElementById("legend-items");
+    el.innerHTML = Object.values(STATUTS).map(s =>
+      `<div class="legend-item"><span class="dot" style="background:${s.dot}"></span>${s.label}</div>`
+    ).join("");
+  }
+
+  /* =====================================================
+     RENDU : CARTE
+  ===================================================== */
+  function initMap(){
+    map = L.map("map", { zoomControl: true }).setView([46.7, 2.4], 6);
+    // Fond de carte OpenStreetMap pour le prototype.
+    // En production : remplacer cette couche par les tuiles vectorielles
+    // OpenFreeMap (ex. via MapLibre GL JS — https://tiles.openfreemap.org/styles/liberty),
+    // conformément au cahier des charges §5.
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 19,
+    }).addTo(map);
+
+    companies.forEach(c => {
+      const marker = L.circleMarker([c.lat, c.lng], {
+        radius: 9, weight: 2, color: "#ffffff", fillOpacity: 0.95,
+        fillColor: STATUTS[c.statut].dot,
+      });
+      marker.on("click", () => selectCompany(c.id));
+      marker.bindTooltip(`${c.nom} — ${c.ville}`, { direction: "top", offset: [0, -6] });
+      markersById[c.id] = marker;
+    });
+  }
+
+  function renderMap(filteredIds){
+    companies.forEach(c => {
+      const marker = markersById[c.id];
+      marker.setStyle({
+        fillColor: STATUTS[c.statut].dot,
+        radius: c.id === state.selectedId ? 13 : 9,
+        weight: c.id === state.selectedId ? 3 : 2,
+      });
+      const shouldShow = filteredIds.has(c.id);
+      const onMap = map.hasLayer(marker);
+      if(shouldShow && !onMap) marker.addTo(map);
+      if(!shouldShow && onMap) map.removeLayer(marker);
+    });
+  }
+
+  /* =====================================================
+     RENDU : LISTE
+  ===================================================== */
+  function renderList(filtered){
+    const tbody = document.getElementById("table-body");
+
+    if(filtered.length === 0){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Aucune entreprise ne correspond à ces critères.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(c => `
+      <tr class="${c.id === state.selectedId ? "selected" : ""}" data-id="${c.id}">
+        <td>
+          <div class="cell-main">${escapeHtml(c.nom)}</div>
+          <div class="cell-sub">${c.siren}</div>
+        </td>
+        <td>${escapeHtml(c.ville)}</td>
+        <td>${escapeHtml(c.secteur)}<div class="cell-sub">${c.naf}</div></td>
+        <td>
+          <select class="status-select" data-id="${c.id}">
+            ${Object.entries(STATUTS).map(([key, conf]) =>
+              `<option value="${key}" ${c.statut===key?"selected":""}>${conf.label}</option>`
+            ).join("")}
+          </select>
+        </td>
+        <td>${formatDate(c.dernierContact)}</td>
+        <td>${formatDate(c.prochaineRelance)}</td>
+        <td><button class="btn btn-sm" data-open="${c.id}">Voir la fiche</button></td>
+      </tr>
+    `).join("");
+
+    // Lignes -> ouverture de la fiche
+    tbody.querySelectorAll("tr[data-id]").forEach(tr => {
+      tr.addEventListener("click", e => {
+        if(e.target.closest("select") || e.target.closest("button")) return;
+        selectCompany(Number(tr.dataset.id));
+      });
+    });
+    tbody.querySelectorAll("button[data-open]").forEach(btn => {
+      btn.addEventListener("click", () => selectCompany(Number(btn.dataset.open)));
+    });
+    // Modification rapide du statut
+    tbody.querySelectorAll(".status-select").forEach(sel => {
+      sel.addEventListener("click", e => e.stopPropagation());
+      sel.addEventListener("change", () => {
+        const company = companies.find(c => c.id === Number(sel.dataset.id));
+        company.statut = sel.value;
+        render();
+        showToast(`Statut mis à jour : ${STATUTS[company.statut].label}`);
+      });
+    });
+  }
+
+  /* =====================================================
+     RENDU : EN-TETES TRIABLES
+  ===================================================== */
+  function renderSortIndicators(){
+    document.querySelectorAll("th[data-sort]").forEach(th => {
+      th.querySelector(".arrow")?.remove();
+      if(th.dataset.sort === state.sort.field){
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.textContent = state.sort.dir === "asc" ? "▲" : "▼";
+        th.appendChild(arrow);
+      }
+    });
+  }
+
+  /* =====================================================
+     RENDU : FICHE ENTREPRISE
+  ===================================================== */
+  function renderDetailPanel(){
+    const panel = document.getElementById("detail-panel");
+    if(state.selectedId === null){
+      panel.classList.remove("open");
+      return;
+    }
+    const c = companies.find(x => x.id === state.selectedId);
+    panel.classList.add("open");
+
+    document.getElementById("detail-nom").textContent = c.nom;
+    document.getElementById("detail-meta").innerHTML =
+      `${escapeHtml(c.ville)} · <span class="badge status-${c.statut}"><span class="dot"></span>${STATUTS[c.statut].label}</span>`;
+
+    document.getElementById("detail-siren").textContent = c.siren;
+    document.getElementById("detail-siret").textContent = c.siret;
+    document.getElementById("detail-adresse").textContent = `${c.adresse}, ${c.ville}`;
+    document.getElementById("detail-departement").textContent = c.departement;
+    document.getElementById("detail-region").textContent = c.region;
+    document.getElementById("detail-secteur").textContent = c.secteur;
+    document.getElementById("detail-naf").textContent = c.naf;
+
+    document.getElementById("detail-contact").value = c.contact;
+    document.getElementById("detail-telephone").value = c.telephone;
+    document.getElementById("detail-email").value = c.email;
+
+    const statutSelect = document.getElementById("detail-statut");
+    statutSelect.innerHTML = Object.entries(STATUTS).map(([key, conf]) =>
+      `<option value="${key}" ${c.statut===key?"selected":""}>${conf.label}</option>`
+    ).join("");
+
+    document.getElementById("detail-dernier-contact").value = c.dernierContact || "";
+    document.getElementById("detail-prochaine-relance").value = c.prochaineRelance || "";
+
+    const urgencyEl = document.getElementById("detail-urgency");
+    const days = daysFromToday(c.prochaineRelance);
+    if(days === null){
+      urgencyEl.innerHTML = "";
+    } else if(days < 0){
+      urgencyEl.innerHTML = `<span class="urgency late">Relance en retard de ${Math.abs(days)} j</span>`;
+    } else if(days <= 7){
+      urgencyEl.innerHTML = `<span class="urgency soon">Relance dans ${days} j</span>`;
+    } else {
+      urgencyEl.innerHTML = "";
+    }
+
+    renderComments(c);
+    document.getElementById("detail-new-comment").value = "";
+  }
+
+  function renderComments(c){
+    const wrap = document.getElementById("detail-comments");
+    if(!c.commentaires.length){
+      wrap.innerHTML = `<p class="no-comments">Aucun commentaire pour le moment.</p>`;
+      return;
+    }
+    wrap.innerHTML = c.commentaires.slice().reverse().map(com => `
+      <div class="comment">
+        <div class="comment-meta">${escapeHtml(com.auteur)} · ${formatDate(com.date)}</div>
+        <div class="comment-text">${escapeHtml(com.texte)}</div>
+      </div>
+    `).join("");
+  }
+
+  function selectCompany(id){
+    state.selectedId = id;
+    render();
+    if(state.view === "map"){
+      const c = companies.find(x => x.id === id);
+      map.flyTo([c.lat, c.lng], Math.max(map.getZoom(), 9), { duration: 0.5 });
+    }
+  }
+
+  function closeDetailPanel(){
+    state.selectedId = null;
+    render();
+  }
+
+  /* =====================================================
+     RENDU GLOBAL
+  ===================================================== */
+  function render(){
+    const filtered = getFilteredCompanies();
+    const filteredIds = new Set(filtered.map(c => c.id));
+
+    renderStats();
+    renderMap(filteredIds);
+    renderList(filtered);
+    renderSortIndicators();
+    renderDetailPanel();
+
+    document.getElementById("results-count").textContent =
+      `${filtered.length} entreprise${filtered.length===1?"":"s"} affichée${filtered.length===1?"":"s"} sur ${companies.length}`;
+  }
+
+  /* =====================================================
+     EVENEMENTS
+  ===================================================== */
+  function bindEvents(){
+    // Connexion
+    document.getElementById("login-form").addEventListener("submit", e => {
+      e.preventDefault();
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      if(!map){
+        initMap();
+        initFilterOptions();
+        renderLegend();
+        render();
+        setTimeout(() => map.invalidateSize(), 50);
+      }
+    });
+
+    // Déconnexion
+    document.getElementById("btn-logout").addEventListener("click", () => {
+      document.getElementById("app").classList.add("hidden");
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("login-email").value = "";
+      document.getElementById("login-password").value = "";
+      closeDetailPanel();
+    });
+
+    // Recherche globale
+    document.getElementById("search-input").addEventListener("input", e => {
+      state.search = e.target.value;
+      render();
+    });
+
+    // Filtres select / input
+    [
+      ["filter-region","region"], ["filter-departement","departement"], ["filter-ville","ville"],
+      ["filter-secteur","secteur"], ["filter-naf","naf"],
+      ["filter-contact-depuis","contactDepuis"], ["filter-relance-avant","relanceAvant"],
+    ].forEach(([id, key]) => {
+      document.getElementById(id).addEventListener("input", e => {
+        state.filters[key] = e.target.value;
+        render();
+      });
+    });
+
+    // Filtres de statut
+    document.getElementById("filter-statuts").addEventListener("change", e => {
+      const input = e.target;
+      if(input.dataset.statut){
+        if(input.checked) state.filters.statuts.add(input.dataset.statut);
+        else state.filters.statuts.delete(input.dataset.statut);
+        render();
+      }
+    });
+
+    // Réinitialisation des filtres
+    document.getElementById("btn-reset-filters").addEventListener("click", () => {
+      state.search = "";
+      state.filters = {
+        region:"", departement:"", ville:"", secteur:"", naf:"",
+        statuts: new Set(Object.keys(STATUTS)),
+        contactDepuis:"", relanceAvant:"",
+      };
+      document.getElementById("search-input").value = "";
+      ["filter-region","filter-departement","filter-ville","filter-secteur","filter-naf","filter-contact-depuis","filter-relance-avant"]
+        .forEach(id => document.getElementById(id).value = "");
+      document.querySelectorAll("#filter-statuts input").forEach(cb => cb.checked = true);
+      render();
+    });
+
+    // Bascule Carte / Liste
+    document.querySelectorAll(".view-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        state.view = tab.dataset.view;
+        document.getElementById("map-view").classList.toggle("hidden", state.view !== "map");
+        document.getElementById("list-view").classList.toggle("hidden", state.view !== "list");
+        if(state.view === "map") setTimeout(() => map.invalidateSize(), 0);
+      });
+    });
+
+    // Tri du tableau
+    document.querySelectorAll("th[data-sort]").forEach(th => {
+      th.addEventListener("click", () => {
+        const field = th.dataset.sort;
+        if(state.sort.field === field){
+          state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+        } else {
+          state.sort.field = field;
+          state.sort.dir = "asc";
+        }
+        render();
+      });
+    });
+
+    // Fiche entreprise
+    document.getElementById("btn-close-detail").addEventListener("click", closeDetailPanel);
+
+    document.getElementById("btn-save-detail").addEventListener("click", () => {
+      const c = companies.find(x => x.id === state.selectedId);
+      if(!c) return;
+      c.contact = document.getElementById("detail-contact").value;
+      c.telephone = document.getElementById("detail-telephone").value;
+      c.email = document.getElementById("detail-email").value;
+      c.statut = document.getElementById("detail-statut").value;
+      c.dernierContact = document.getElementById("detail-dernier-contact").value || null;
+      c.prochaineRelance = document.getElementById("detail-prochaine-relance").value || null;
+      render();
+      showToast("Modifications enregistrées");
+    });
+
+    document.getElementById("btn-add-comment").addEventListener("click", () => {
+      const c = companies.find(x => x.id === state.selectedId);
+      const textarea = document.getElementById("detail-new-comment");
+      const texte = textarea.value.trim();
+      if(!c || !texte) return;
+      const today = new Date().toISOString().slice(0,10);
+      c.commentaires.push({ auteur: "Robin Hantzer", date: today, texte });
+      renderComments(c);
+      textarea.value = "";
+      showToast("Commentaire ajouté");
+    });
+
+    // Filtres mobiles (panneau latéral)
+    document.getElementById("btn-open-filters").addEventListener("click", () => {
+      document.getElementById("sidebar").classList.add("open");
+      document.getElementById("backdrop").classList.add("show");
+    });
+    document.getElementById("backdrop").addEventListener("click", () => {
+      document.getElementById("sidebar").classList.remove("open");
+      document.getElementById("backdrop").classList.remove("show");
+    });
+  }
+
+  bindEvents();
+  </script>
+</body>
+</html>
